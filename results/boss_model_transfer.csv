@@ -1,0 +1,6 @@
+model,test_acc_optimised,test_acc_baseline,delta
+llama3-8b,0.9,0.9,0.0
+mistral-7b,0.8,0.85,-0.05
+nova-micro,0.85,,
+mixtral-8x7b,0.85,,
+llama3-70b,0.9,,

@@ -1,0 +1,7 @@
+venv/
+package/
+__pycache__/
+*.pyc
+lambda_package.zip
+results/plots/
+.env
