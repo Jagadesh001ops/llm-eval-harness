@@ -102,7 +102,7 @@ TASKS = {
 for _sub in BBH_SUBTASKS:
     TASKS[f"bbh_{_sub}"] = Task(
         name=f"bbh_{_sub}",
-        max_tokens=768,  # step-by-step reasoning for 5-object puzzles can be long
+        max_tokens=2048,  # 768 truncated up to 39% of Ministral replies in the first headroom run
         fill=lambda tmpl, it: tmpl.replace("{input}", it["input"]),
         score=lambda out, it: bbh_correct(out, it["target"]),
         show_input=lambda it: it["input"],
