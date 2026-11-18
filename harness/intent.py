@@ -64,19 +64,26 @@ def check_candidate(candidate, card, seed_prompt, leak_index):
     if extra:
         v.append(("placeholder", f"unexpected placeholders {extra}"))
 
+    labels = view.get("labels") or []
     lw = set(words(candidate))
-    missing = [lab for lab in view["labels"] if lab.lower() not in lw]
+    missing = [lab for lab in labels if lab.lower() not in lw]
     if missing:
         v.append(("labels", f"label words missing: {missing}"))
+    missing_tokens = [t for t in view.get("required_tokens") or [] if t not in candidate]
+    if missing_tokens:
+        v.append(("labels", f"required output tokens missing: {missing_tokens}"))
 
     if len(candidate) > LENGTH_CAP_RATIO * len(seed_prompt):
         v.append(("length", f"{len(candidate)} chars > {LENGTH_CAP_RATIO}x seed ({len(seed_prompt)})"))
 
     if _EXAMPLE_INPUT.search(candidate):
         v.append(("few_shot", "contains a filled-in example input line"))
-    label_alt = "|".join(re.escape(lab) for lab in view["labels"])
-    if re.search(rf"^\s*(topic|answer|label|category|output|sentiment)\s*:\s*({label_alt})\b", candidate, re.I | re.M):
-        v.append(("few_shot", "contains an example answer line"))
+    if labels:
+        label_alt = "|".join(re.escape(lab) for lab in labels)
+        if re.search(rf"^\s*(topic|answer|label|category|output|sentiment)\s*:\s*({label_alt})\b", candidate, re.I | re.M):
+            v.append(("few_shot", "contains an example answer line"))
+    if re.search(r"^\s*answer\s*:\s*[-$]?\d", candidate, re.I | re.M):  # a worked numeric answer ("Answer: 42")
+        v.append(("few_shot", "contains an example numeric answer line"))
 
     own = ngrams(seed_prompt) | ngrams(yaml.safe_dump(view))
     leaked = (ngrams(candidate) - own) & leak_index

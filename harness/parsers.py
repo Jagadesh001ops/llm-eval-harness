@@ -135,3 +135,36 @@ def strict_sentiment_label(raw_output, prompt_variant):
 
 def strict_ag_label(raw_output, prompt_variant):
     return _strict_label(raw_output, _AG_MAP, "cot" if prompt_variant == "chain_of_thought" else "answer")
+
+
+# ── GSM8K ───────────────────────────────────────────────────────────────────
+
+_NUMBER = re.compile(r"-?\$?\s?\d[\d,]*(?:\.\d+)?")
+
+
+def _to_float(s):
+    try:
+        return float(s.replace("$", "").replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+def gsm8k_gold(answer_field):
+    """Gold answer from the dataset's solution text, which ends with '#### <number>'."""
+    return _to_float(answer_field.split("####")[-1])
+
+
+def extract_gsm8k_answer(raw_output):
+    """Number after the LAST 'Answer:' in the output (the task's output contract). No 'Answer:' -> None (scored
+    wrong): a reply truncated before its final line, or one ignoring the format, is not guessed from the reasoning."""
+    text = raw_output or ""
+    pos = text.lower().rfind("answer:")
+    if pos < 0:
+        return None
+    m = _NUMBER.search(text[pos + len("answer:"):])
+    return _to_float(m.group(0)) if m else None
+
+
+def gsm8k_correct(raw_output, gold):
+    pred = extract_gsm8k_answer(raw_output)
+    return int(pred is not None and gold is not None and abs(pred - gold) < 1e-6)

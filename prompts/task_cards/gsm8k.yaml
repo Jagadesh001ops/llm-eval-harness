@@ -1,0 +1,28 @@
+# Frozen task definition for GSM8K (design doc §6.1). Do not edit after the pilot starts.
+task: gsm8k
+
+# ── Shown to optimizers ─────────────────────────────────────────────────────
+optimizer_view:
+  description: Solve a grade-school math word problem.
+  input: A math word problem in English, inserted at {question}.
+  output_contract: >
+    The model may reason in any way, but its reply must end with a final line of the form "Answer: <number>".
+    The number after the last "Answer:" is compared with the correct numeric answer.
+  labels: []
+  required_tokens: ["Answer:"]
+  placeholders: ["{question}"]
+
+# ── Judge only (never shown to optimizers) ──────────────────────────────────
+judge_view:
+  dataset_label_definitions:
+    answer: a single number (integer in almost all problems); units and currency symbols are not part of the answer
+  allowed_clarifications:
+    - instructions on how to reason (step by step, check arithmetic, re-read the question)
+    - instructions on the final-answer format consistent with the output contract (e.g. number only, no units)
+    - general problem-solving strategies (identify quantities, set up equations)
+  forbidden:
+    - changing the answer format away from a final "Answer: <number>" line
+    - facts, formulas or numbers specific to particular problems seen in the failures
+    - worked examples or solved problems (instruction-only track)
+    - text copied from any dataset item
+    - telling the model to output anything other than its own solution (e.g. to guess a fixed number)
