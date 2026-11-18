@@ -5,3 +5,4 @@ __pycache__/
 lambda_package.zip
 results/plots/
 .env
+.pytest_cache/
