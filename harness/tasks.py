@@ -94,8 +94,7 @@ TASKS = {
         max_tokens=60,
         fill=lambda tmpl, it: tmpl.replace("{context}", it["context"]).replace("{question}", it["question"]),
         score=lambda out, it: squad_score(out, it["golds"]),  # per-item F1 in [0, 1]
-        show_input=lambda it: f"Passage: {it['context']}
-Question: {it['question']}",
+        show_input=lambda it: "Passage: " + it["context"] + "\nQuestion: " + it["question"],
         show_gold=lambda it: it["golds"][0] if it["golds"] else NO_ANSWER,
     ),
 }
