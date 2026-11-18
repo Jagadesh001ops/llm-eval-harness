@@ -5,8 +5,8 @@ import pathlib
 from dataclasses import dataclass
 from typing import Callable
 
-from harness.parsers import (NO_ANSWER, bbh_correct, gsm8k_correct, gsm8k_gold, squad_score,
-                             strict_ag_label)
+from harness.parsers import (NO_ANSWER, bbh_correct, exact_match, extract_trivia_answer, gsm8k_correct,
+                             gsm8k_gold, squad_score, strict_ag_label)
 
 AG_LABELS = ["world", "sports", "business", "science"]
 
@@ -69,6 +69,19 @@ def _squad_items(split_name):
     return out
 
 
+def _trivia_items(split_name):
+    from datasets import load_dataset
+    spec = _split_spec("triviaqa")
+    part = spec[split_name]
+    ds = load_dataset(spec["hf_path"], spec["hf_config"], split=part["split"])
+    out = []
+    for i in part["indices"]:
+        a = ds[i]["answer"]
+        out.append({"id": f"{part['split']}:{i}", "question": ds[i]["question"],
+                    "aliases": sorted(set(a["aliases"] + [a["value"]])), "value": a["value"]})
+    return out
+
+
 BBH_SUBTASKS = ["date_understanding", "logical_deduction_five_objects", "tracking_shuffled_objects_five_objects",
                 "web_of_lies", "causal_judgement"]
 
@@ -88,6 +101,14 @@ TASKS = {
         score=lambda out, it: gsm8k_correct(out, it["gold"]),
         show_input=lambda it: it["question"],
         show_gold=lambda it: _fmt_number(it["gold"]),  # final number only, never the worked solution
+    ),
+    "triviaqa": Task(
+        name="triviaqa",
+        max_tokens=30,  # short direct answers; the control measures format vs knowledge
+        fill=lambda tmpl, it: tmpl.replace("{question}", it["question"]),
+        score=lambda out, it: int(exact_match(extract_trivia_answer(out), it["aliases"])),  # EM drives selection
+        show_input=lambda it: it["question"],
+        show_gold=lambda it: it["value"],
     ),
     "squad_v2": Task(
         name="squad_v2",
@@ -109,7 +130,7 @@ for _sub in BBH_SUBTASKS:
         show_gold=lambda it: it["target"],
     )
 
-_LOADERS = {"ag_news": _ag_items, "gsm8k": _gsm8k_items, "squad_v2": _squad_items,
+_LOADERS = {"ag_news": _ag_items, "gsm8k": _gsm8k_items, "squad_v2": _squad_items, "triviaqa": _trivia_items,
             **{f"bbh_{s}": (lambda split, _t=f"bbh_{s}": _bbh_items(_t, split)) for s in BBH_SUBTASKS}}
 
 

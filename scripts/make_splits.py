@@ -24,6 +24,7 @@ OUT = pathlib.Path("data/splits")
 TASKS = {
     "ag_news": ("fancyzhx/ag_news", None, "train", "test", lambda r: r["text"], range(100)),
     "gsm8k": ("openai/gsm8k", "main", "train", "test", lambda r: r["question"], ()),
+    "triviaqa": ("mandarjoshi/trivia_qa", "rc.nocontext", "train", "validation", lambda r: r["question"], range(100)),
 }
 N_POOL, N_DEV, N_TEST = 500, 200, 500
 

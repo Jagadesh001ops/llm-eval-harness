@@ -13,6 +13,7 @@ SAMPLE_ITEMS = {
     "gsm8k": {"id": "x", "question": "2 + 2?", "gold": 4.0},
     "squad_v2": {"id": "x", "context": "The Normans lived in Normandy.", "question": "Where?", "golds": ["Normandy"],
                  "group": "answerable"},
+    "triviaqa": {"id": "x", "question": "Capital of France?", "aliases": ["Paris"], "value": "Paris"},
 }
 
 
