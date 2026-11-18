@@ -77,6 +77,8 @@ def main():
     ap.add_argument("--skip-test", action="store_true", help="skip the final test-set evaluation (smoke tests)")
     ap.add_argument("--out-root", default="results/opt")
     ap.add_argument("--force", action="store_true", help="overwrite an existing log")
+    ap.add_argument("--intent-judge", action="store_true",
+                    help="layer-2 intent judge rejects rewrites it says change the intent (use only once validated)")
     args = ap.parse_args()
 
     configure_huggingface()
@@ -99,11 +101,15 @@ def main():
     leak_index = build_leak_index([task.show_input(it) for it in pool + dev + test])
     max_chars = int(LENGTH_CAP_RATIO * len(seed))
     optimizer = make_optimizer(opt_name, effort=effort)
+    judge = None
+    if args.intent_judge:
+        from harness.judge import IntentJudge
+        judge = IntentJudge()
 
     log = {"protocol": PROTOCOL, "min_rounds": MIN_ROUNDS, "patience": PATIENCE, "task": args.task, "target": args.target, "condition": args.condition, "run": args.run,
            "optimizer": opt_name, "effort": effort, "feedback": feedback, "rounds_max": args.rounds,
            "dev_n": len(dev), "seed_prompt": seed, "seed_sha": prompt_sha(seed), "rounds": [],
-           "cost_usd": {"target_scoring": 0.0, "optimizer": 0.0}, "status": "running",
+           "intent_judge": bool(judge), "cost_usd": {"target_scoring": 0.0, "optimizer": 0.0, "judge": 0.0}, "status": "running",
            "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
     def save():
@@ -133,6 +139,15 @@ def main():
                 viol = check_candidate(c, card, seed, leak_index)
                 entry = {"prompt": c, "sha": prompt_sha(c), "violations": viol,
                          "lexical_novelty": lexical_novelty(c, card, seed), "chars": len(c)}
+                if not viol and judge is not None:
+                    for _attempt in range(2):  # one retry if the verdict could not be parsed
+                        jv = judge.judge(card, seed, c)
+                        log["cost_usd"]["judge"] += jv["cost_usd"]
+                        if jv["verdict"] != "error":
+                            break
+                    entry["judge"] = {"verdict": jv["verdict"], "reason": jv["reason"]}
+                    if jv["verdict"] != "keeps":  # 'changes' or a twice-unparseable verdict both reject
+                        viol.append(("intent_judge", jv["reason"] or jv["verdict"]))
                 if not viol:
                     sc = score_prompt(task, args.target, c, dev)
                     log["cost_usd"]["target_scoring"] += sc["cost_usd"]
@@ -178,7 +193,8 @@ def main():
         log["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         save()
         c = log["cost_usd"]
-        print(f"cost: target ${c['target_scoring']:.4f} + optimizer ${c['optimizer']:.4f} -> {out}")
+        print(f"cost: target ${c['target_scoring']:.4f} + optimizer ${c['optimizer']:.4f} "
+              f"+ judge ${c.get('judge', 0.0):.4f} -> {out}")
 
 
 if __name__ == "__main__":
