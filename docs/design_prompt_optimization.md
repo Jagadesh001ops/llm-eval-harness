@@ -27,25 +27,39 @@ We deliberately avoid "distillation" and "transfer learning": both imply weight 
 
 ### Targets (prompt is optimized; accuracy is measured)
 
-| Model | Why |
-|---|---|
-| Gemma 3 4B | small end of a clean, dense, single-family size ladder |
-| Gemma 3 12B | middle; closest in size to the retired Llama-3-8B |
-| Gemma 3 27B | large end of the ladder |
-| Mistral-7B *(open decision, §12)* | continuity with the v1 results and the neutral-hedging analysis |
+| Family | Model | Role |
+|---|---|---|
+| **Core** | Gemma 3 4B | small end of a clean, dense, single-family size ladder |
+| **Core** | Gemma 3 12B | middle; closest in size to the retired Llama-3-8B |
+| **Core** | Gemma 3 27B | large end of the ladder |
+| **Replication** | Ministral 3B (3.0) | second family, so findings are not specific to Gemma |
+| **Replication** | Ministral 8B (3.0) | also keeps a Mistral-family model for continuity with v1 |
+| **Replication** | Ministral 14B (3.0) | large end of the second ladder |
 
-All targets are served through AWS Bedrock. Gemma weights are public, so results can be reproduced outside Bedrock.
-Llama-3-8B/70B are excluded: Bedrock marks both Legacy and intermittently refuses calls (observed 2026-11-18).
+All targets are served through AWS Bedrock (on-demand, US regions). Licence and Bedrock lifecycle status (Active vs
+Legacy) are to be confirmed via the Bedrock API before the pilot.
+
+Excluded: Llama-3-8B/70B (Bedrock Legacy, intermittently refusing calls, observed 2026-11-18); Mistral-7B v0.2
+(replaced by Ministral 8B to avoid the same Legacy risk); Llama 3.2 1B/3B/11B (11B is the vision model, so not a clean
+text ladder; older generation; listed in one region only); Magistral (reasoning-trace model, would confound the
+comparison), Devstral (code), Voxtral (audio).
 
 ### Optimizer conditions (who rewrites)
 
 | Condition | Optimizer | Applied to |
 |---|---|---|
-| **Strong** | Claude Opus 5.5 | every target |
+| **Strong (closed)** | Claude Opus 5.5, effort `low` | every target |
+| **Strong (open)** | Mistral Large 3 | every target |
 | **Mid** | Claude Haiku 5.5 | every target |
 | **Self** | the target itself | its own prompt only |
 | **Control** | the target itself, **without** failures or scores ("improve this prompt") | its own prompt only |
-| **Same-family larger** (extension) | Gemma 3 27B | Gemma 3 4B and Gemma 3 12B |
+| **Same-family larger** (extension) | Gemma 3 27B → Gemma 3 4B, 12B · Ministral 14B → Ministral 3B, 8B | smaller members of the same family |
+
+Two strong optimizers separate "a strong optimizer" from "Claude specifically": if the open Mistral Large 3 matches
+Opus, size/capability is what matters, not the vendor.
+
+Opus 5.5 runs at effort `low` for cost (its thinking cannot be disabled and is billed as output). The pilot checks
+that rewrite quality at `low` is not visibly worse than at `medium` on a small sample before the grid uses `low`.
 
 The **control** separates "feedback helps" from "rewriting + selecting the best of many candidates on dev helps by
 chance". If *self* does not beat *control*, the small model is not actually fixing anything.
@@ -205,22 +219,48 @@ Written before any run; each will be reported as supported / not supported / inc
 
 * **H1** Strong (Opus) test gain > self test gain, for every target.
 * **H2** Self-optimization gains appear on dev but shrink on test (dev–test gap larger for self than for strong).
-* **H3** Self beats control only for the larger targets (self-optimization ability grows with model size: 4B < 12B < 27B).
+* **H3** Self beats control only for the larger targets (self-optimization ability grows with model size within a
+  family: Gemma 4B < 12B < 27B; Ministral 3B < 8B < 14B).
 * **H4** Prompts from stronger optimizers transfer better to other targets.
-* **H5** Same-family larger (27B→4B, 27B→12B) recovers a substantial part of the strong-optimizer gain.
+* **H5** Same-family larger (Gemma 27B→4B/12B; Ministral 14B→3B/8B) recovers a substantial part of the
+  strong-optimizer gain.
 * **H6** Smaller optimizers violate the intent rules more often (§6).
 * **H7** On TriviaQA (control), gains are concentrated in exact match (format), not contains-answer (knowledge).
+* **H8** The open strong optimizer (Mistral Large 3) and the closed one (Opus 5.5) produce test gains whose paired
+  difference is within ±2 points, i.e. "strong" is about capability, not vendor. (Equivalence claim: supported only if
+  the whole 95% interval of the difference lies inside ±2 points.)
+* **Replication:** H1–H6 are tested separately in each family; a finding is reported as general only if its direction
+  holds in both Gemma and Ministral.
 
 ## 9. Size, cost and the pilot
 
-Full grid per task and run: 4 targets × 4 conditions + 2 extension loops = 18 loops; × 3 main tasks × 3 runs =
-**162 loops**, plus TriviaQA at 1 run. Each loop ≤ 16 candidates × 200 dev items = 3,200 target calls.
+Per family, per task and run: 3 targets × 5 conditions (strong-closed, strong-open, mid, self, control) + 2
+same-family-larger loops = **17 loops**. Each loop ≤ 4 rounds × 4 candidates × 200 dev items = 3,200 target calls.
 
-Cost: **not yet measured.** Rough expectation from list prices: target calls cost cents per loop on Gemma; Claude Opus
-5.5 optimizer calls roughly $0.10 each (thinking is billed as output), ~$0.40–0.50 per loop. These are estimates only
-and are replaced by measured numbers after the pilot.
+| Tier | Targets | Tasks | Runs | Loops |
+|---|---|---|---|---|
+| Core | Gemma 3 4B/12B/27B | AG News, GSM8K, SQuAD 2.0 | 3 | 17 × 3 × 3 = **153** |
+| Replication | Ministral 3B/8B/14B | AG News, GSM8K | 2 | 17 × 2 × 2 = **68** |
+| Control | Gemma 3 4B/12B/27B | TriviaQA | 1 | 17 |
 
-**Pilot (run first, then decide on the grid):** AG News × Gemma 3 12B × {strong, mid, self, control, 27B→12B} × 1 run.
+**Cost: not yet measured.** Estimates from list prices, to be replaced by pilot measurements:
+
+| Component | Estimate | Basis |
+|---|---|---|
+| Opus 5.5 optimizer (whole study) | ~$8–17 | ≤ 156 calls (39 loops × 4 rounds), ~3k input + 2–5k output tokens each, effort `low`–`medium` |
+| Mistral Large 3, Haiku 5.5 optimizers | a few dollars | same call count, much lower prices |
+| Target scoring | tens of dollars | dominant cost; volume of dev/test calls |
+
+Cost controls built into the harness (none of them change the design):
+
+1. the seed prompt is scored once per target and shared across all optimizer conditions;
+2. candidate scores are cached by prompt text, so identical rewrites are never re-scored;
+3. early stopping when a round brings no improvement;
+4. Opus 5.5 at effort `low`;
+5. prompt caching on the optimizer's fixed instructions (task card + rules are byte-identical across calls).
+
+**Pilot (run first, then decide on the grid):** AG News × Gemma 3 12B × {strong-closed, strong-open, mid, self, control,
+27B→12B} × 1 run, plus a small `low` vs `medium` effort comparison for Opus.
 Outputs: measured cost, wall-clock time, rate-limit behaviour, first effect sizes, and the ~60 rewrites used to
 validate the intent judge. Go/no-go for the full grid is decided with the project owner.
 
@@ -251,9 +291,12 @@ Every number in the eventual README must trace to one of these files.
 
 ## 12. Open decisions
 
-1. Keep **Mistral-7B** as a fourth target (continuity), or only the three Gemma sizes?
-2. Confirm **SQuAD 2.0** over RACE, and retiring **SST-2** from the new study.
-3. Confirm **Claude Sonnet 5.5** as the intent judge (requires enabling it in Bedrock model access).
+Resolved: Mistral-7B dropped (Ministral 8B instead); Ministral 3B/8B/14B added as replication family; Mistral Large 3
+added as open strong optimizer; Opus 5.5 at effort `low` as closed strong optimizer; Claude Sonnet 5.5 as intent judge.
+
+Still open:
+
+1. Confirm **SQuAD 2.0** over RACE, and retiring **SST-2** from the new study.
 
 ## 13. Relation to the original brief
 
