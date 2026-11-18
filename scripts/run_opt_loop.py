@@ -153,10 +153,20 @@ def main():
                     log["cost_usd"]["target_scoring"] += sc["cost_usd"]
                     entry["dev_accuracy"] = sc["accuracy"]
                     history.append((c, sc["accuracy"]))
+                elif [v[0] for v in viol] == ["intent_judge"]:
+                    # Shadow score: rejected ONLY by the (unvalidated) judge. Scored on dev so we can later see whether
+                    # the judge blocked a would-be winner, but never selected and never shown in the history.
+                    sc = score_prompt(task, args.target, c, dev)
+                    log["cost_usd"]["target_scoring"] += sc["cost_usd"]
+                    entry["shadow_dev_accuracy"] = sc["accuracy"]
                 cands.append(entry)
 
             valid = [e for e in cands if "dev_accuracy" in e]
             best = max(valid, key=lambda e: e["dev_accuracy"], default=None)
+            shadow = [e for e in cands if "shadow_dev_accuracy" in e]
+            shadow_best = max((e["shadow_dev_accuracy"] for e in shadow), default=None)
+            judge_blocked_winner = shadow_best is not None and shadow_best > max(
+                current_dev, best["dev_accuracy"] if best else float("-inf"))
             improved = best is not None and best["dev_accuracy"] > current_dev
             if improved:
                 current, current_dev = best["prompt"], best["dev_accuracy"]
@@ -164,6 +174,7 @@ def main():
                 "round": rnd, "failures_shown": [f["id"] for f in fails], "optimizer_stop_reason": resp["stop_reason"],
                 "optimizer_tokens": [resp["input_tokens"], resp["output_tokens"]],
                 "n_parsed": len(resp["candidates"]), "n_valid": len(valid), "candidates": cands,
+                "n_judge_rejected": len(shadow), "judge_blocked_winner": judge_blocked_winner,
                 "improved": improved, "current_dev_accuracy": current_dev, "optimizer_analysis": resp.get("analysis"),
                 "optimizer_raw": resp["raw"]})
             save()
