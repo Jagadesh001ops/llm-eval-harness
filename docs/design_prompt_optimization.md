@@ -227,6 +227,8 @@ the card never hands optimizers the answer to a flaw they are supposed to discov
    * rule-violation rate and judge-rejection rate;
    * prompt length.
 
+**Validation outcome (2026-11-18): FAILED.** Two labelling passes by the project owner gave 68.4% agreement (kappa 0.22) and 75.5% (kappa 0.36) against the 85% / 0.70 bar (`results/judge_validation/report*.md`). On the 12 constructed intent-changing items, whose answer is known by design, the judge flagged 12/12 and the human labels 5/12 in both passes; the labeller's notes suggest the labels judged prompt completeness rather than intent. Per the pre-registered rule, the judge is **not** used to reject candidates. Instead: (1) the grid runs with layer-1 checks only; (2) the judge is run afterwards on every candidate and its verdicts are reported as flags from an unvalidated judge; (3) main results are reported with and without judge-flagged final prompts (sensitivity analysis); (4) final prompts get human review, preferably by a second person.
+
 Rejections are part of the result: "the 4B self-optimizer broke the task definition in X% of rewrites" is a finding.
 
 ## 7. Metrics and statistics
