@@ -7,10 +7,14 @@ Strict parsing rules (documented in docs/statistics.md):
   * zero_shot / few_shot ("answer" mode): the label is the first word of the output; if the first word
     is not a label, the first line is accepted only if it names exactly one label. Text after the first
     line (models often hallucinate extra few-shot examples there) is ignored.
-  * chain_of_thought ("cot" mode): the prompt asks the model to END with the label, so the last word
-    must be a label. Reasoning truncated before a final answer is "invalid", not guessed.
-  * Outcomes: a task label, "neutral" (a hedge; sentiment only - not a valid SST-2 class, so scored
-    wrong), or "invalid" (no parseable answer; scored wrong).
+  * chain_of_thought ("cot" mode): the prompt asks the model to END with the label, so the last word is
+    checked first. Some models answer first and explain after ("Negative. The text expresses..."), so if
+    the last word is not a label, a label as the FIRST word is accepted (a label elsewhere in the first
+    line is not: in CoT that is usually truncated reasoning). Reasoning truncated
+    before any answer is "invalid", not guessed.
+  * Outcomes: a task label; "neutral" (sentiment hedge - not an SST-2 class); "ambiguous" (the answer
+    names more than one class, e.g. "science (or business, depending on the focus)"); or "invalid"
+    (no parseable label). Only a single task label can be scored correct.
 """
 
 import re
@@ -80,6 +84,7 @@ def contains_answer(prediction, aliases):
 
 NEUTRAL = "neutral"
 INVALID = "invalid"
+AMBIGUOUS = "ambiguous"
 
 _SENTIMENT_MAP = {"positive": "positive", "negative": "negative", "neutral": NEUTRAL, "mixed": NEUTRAL}
 # AG News' official class name is "Sci/Tech", so technology words map to science. Nothing else is mapped:
@@ -101,7 +106,9 @@ def _strict_label(raw_output, mapping, mode):
         return INVALID
     if mode == "cot":
         words = _words(text)
-        return mapping.get(words[-1], INVALID) if words else INVALID
+        if words and words[-1] in mapping:
+            return mapping[words[-1]]
+        # fall through: answer-first style
     first_line = next((ln for ln in text.splitlines() if ln.strip()), "")
     first_line = _PREFIX.sub("", first_line.strip().lstrip("*#>\"' "))
     words = _words(first_line)
@@ -114,8 +121,12 @@ def _strict_label(raw_output, mapping, mode):
         # A leading class label is rejected if the line also names a different class ("positive or negative").
         if first == NEUTRAL or not (found - {first, NEUTRAL}):
             return first
+        return AMBIGUOUS
+    if mode == "cot" or not found:
+        # In CoT a label mid-sentence is usually truncated reasoning ("...reinforces the negative
+        # sentiment"), not an answer, so only answer-first outputs (label as first word) are accepted.
         return INVALID
-    return found.pop() if len(found) == 1 else INVALID
+    return found.pop() if len(found) == 1 else AMBIGUOUS
 
 
 def strict_sentiment_label(raw_output, prompt_variant):

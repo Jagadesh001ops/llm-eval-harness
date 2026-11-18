@@ -2,7 +2,7 @@
 
 import pytest
 
-from harness.parsers import (INVALID, NEUTRAL, legacy_ag_label, legacy_sentiment_label, strict_ag_label,
+from harness.parsers import (AMBIGUOUS, INVALID, NEUTRAL, legacy_ag_label, legacy_sentiment_label, strict_ag_label,
                              strict_sentiment_label)
 
 # Mistral few-shot hedge followed by hallucinated few-shot examples (results/all_models_all_prompts.csv).
@@ -37,7 +37,7 @@ class TestStrictSentimentAnswerMode:
         (MISTRAL_HEDGE, NEUTRAL),
         ("neutral (or maybe slightly negative, depending on personal interpretation)", NEUTRAL),
         ("The sentiment is positive.", "positive"),
-        ("positive or negative", INVALID),
+        ("positive or negative", AMBIGUOUS),
         ("neutative", INVALID),
         ("", INVALID),
         ("I cannot determine this.", INVALID),
@@ -55,6 +55,9 @@ class TestStrictSentimentCotMode:
         (LLAMA_TRUNCATED_COT, INVALID),
         ("* The use of the word very reinforces the negative sentiment", INVALID),
         ("Overall this is neutral", NEUTRAL),
+        # answer-first style (Mistral): label, then explanation
+        ("Negative. The text expresses disappointment and criticism towards the waste of talented actors.", "negative"),
+        ("Neutral. The text is stating a fact and does not express a positive or negative sentiment.", NEUTRAL),
     ])
     def test_cases(self, raw, expected):
         assert strict_sentiment_label(raw, "chain_of_thought") == expected
@@ -67,6 +70,9 @@ class TestStrictAg:
         ("Technology", "zero_shot", "science"),
         ("Sci/Tech", "zero_shot", "science"),
         ("Politics", "zero_shot", INVALID),
+        ("SPACE.", "zero_shot", INVALID),
+        ("science (or business, depending on the focus of the article)", "few_shot", AMBIGUOUS),
+        ("World (or, alternatively, Health or Science)", "zero_shot", AMBIGUOUS),
         ("Entertainment", "zero_shot", INVALID),
         ("The topic is world.", "zero_shot", "world"),
         ("world\nHeadline: Fed raises rates\nTopic: business", "few_shot", "world"),
