@@ -72,25 +72,44 @@ bigger than the target". If 27B→4B approaches Opus→4B, a modest same-family 
 * Answering task items (all scoring): temperature 0.
 * Generating rewrites: each optimizer at its **default** sampling. Claude Opus 5.5 and Haiku 5.5 do not accept a
   temperature parameter, so Gemma/Mistral optimizers also run at their default, for parity.
-* Claude calls go through the Anthropic SDK's Bedrock client; target calls through the existing `harness/bedrock.py`.
+* Claude calls go through the Anthropic API (the account's Bedrock access to Anthropic models required company
+  details); all other models go through Bedrock via `harness/bedrock.py`.
 
 ## 3. Tasks
 
 | Role | Task | Split used for test | Skill | Primary metric |
 |---|---|---|---|---|
 | Main | **AG News** (4-class topic) | test | classification; contains a known label-definition flaw (class "Sci/Tech" named "science") | accuracy (strict parser) |
-| Main | **GSM8K** (math word problems) | test | multi-step reasoning; standard benchmark in the prompt-optimization literature | exact numeric match |
-| Main | **SQuAD 2.0** | validation (official test is hidden) | reading comprehension incl. unanswerable questions | F1 on answerable; accuracy on unanswerable; official combined F1 |
+| Main | **SQuAD 2.0** | validation (official test is hidden) | reading comprehension incl. unanswerable questions | per-item F1 (official combined); F1 on answerable and accuracy on unanswerable reported separately |
 | Control | **TriviaQA** (closed-book) | validation | knowledge a prompt cannot add | exact match and contains-answer, reported separately |
 
 Retired from the new study: **SST-2** (near ceiling; the neutral-hedging analysis stays as a supporting section using
 the existing v1 data) and **CNN/DailyMail** (ROUGE-L is easy to game when optimized against; faithfulness metric is
 broken). Both remain reproducible from the v1 results.
 
+### Task selection: why there is no dedicated reasoning task
+
+A reasoning task was planned and dropped because every candidate was saturated for these targets once harness
+defects were fixed. All checks used dev items only (`scripts/check_headroom.py`, results in
+`results/opt/headroom_*.csv`); the pre-set rule was that the seed prompt must leave room to improve (roughly
+40–85% for most targets).
+
+* **GSM8K:** seed dev accuracy 94–96% for five of six targets (Gemma 3 4B: 87%). Ministral 3B at 96% suggests the
+  benchmark is in the models' training data.
+* **BIG-Bench Hard**, five sub-tasks: tracking shuffled objects 87–100%; logical deduction mostly 83–97%; web of lies
+  100% for all Gemma sizes; date understanding 93% for Gemma 12B/27B. Only causal judgement stayed at 51–72%, but its
+  187 items leave 62 for test (CI about ±12 points) and its labels are known to be noisy.
+
+**Finding recorded for the write-up:** with a generic seed that did not state the yes/no answer format, Gemma 3 4B
+scored 1% on web of lies; with an explicit `Answer: Yes / No` line it scored 100%. Much of the apparent difficulty of
+these benchmarks for small models was output-format compliance, not reasoning. This is also why gains on any task are
+read against the TriviaQA control, which isolates format-driven gains.
+
 **TriviaQA as a control:** prompts cannot add facts, so large "gains" there are expected to come from answer-format
 changes. Reporting them separately quantifies how much of any task's gain is format compliance rather than capability.
 
-**Contamination caveat:** GSM8K, SQuAD and TriviaQA are widely published and may appear in training data. This can
+**Contamination caveat:** AG News, SQuAD and TriviaQA are widely published and may appear in training data (in the
+pilot, Opus wrote AG News's own class name "sci/tech" unprompted). This can
 inflate absolute scores; comparisons between prompts on the same model are much less affected.
 
 ## 4. Data splits
@@ -100,7 +119,6 @@ Fixed once with seed `20261118`, written to `data/splits/<task>.json` (item IDs 
 | Task | Failure pool (shown to optimizers) | Dev (selects candidates) | Test (reported) |
 |---|---|---|---|
 | AG News | 500 from train | 200 from train, disjoint from pool | 500 from test, **excluding test[0:100]** (already inspected in v1) |
-| GSM8K | 500 from train | 200 from train | 500 from test |
 | SQuAD 2.0 | 500 from train | 200 from train, 50/50 answerable/unanswerable | 500 from validation, 50/50 answerable/unanswerable |
 | TriviaQA | 500 from train | 200 from train | 500 from validation, **excluding validation[0:100]** |
 
@@ -178,7 +196,7 @@ the card never hands optimizers the answer to a flaw they are supposed to discov
 |---|---|
 | rephrasing, reordering, clarifying the instructions | adding, removing or renaming labels / answer options |
 | defining existing labels in line with the dataset's documentation | changing the task (e.g. sentiment → emotion; QA → summarization) |
-| output-format instructions consistent with the task card | adding domain facts or knowledge (would leak answers, especially on TriviaQA/GSM8K) |
+| output-format instructions consistent with the task card | adding domain facts or knowledge (would leak answers, especially on TriviaQA) |
 | general strategies ("read the whole passage", "check your arithmetic") | text copied from any pool, dev or test item |
 | guidance on edge cases the task card already defines (e.g. when a SQuAD question is unanswerable) | instructions aimed at specific items or keywords seen in the failures |
 | | few-shot examples (instruction-only track) |
@@ -256,17 +274,17 @@ same-family-larger loops = **17 loops**. Each loop ≤ 4 rounds × 4 candidates 
 
 | Tier | Targets | Tasks | Runs | Loops |
 |---|---|---|---|---|
-| Core | Gemma 3 4B/12B/27B | AG News, GSM8K, SQuAD 2.0 | 3 | 17 × 3 × 3 = **153** |
-| Replication | Ministral 3B/8B/14B | AG News, GSM8K | 2 | 17 × 2 × 2 = **68** |
+| Core | Gemma 3 4B/12B/27B | AG News, SQuAD 2.0 | 3 | 17 × 2 × 3 = **102** |
+| Replication | Ministral 3B/8B/14B | AG News | 2 | 17 × 1 × 2 = **34** |
 | Control | Gemma 3 4B/12B/27B | TriviaQA | 1 | 17 |
 
 **Cost: not yet measured.** Estimates from list prices, to be replaced by pilot measurements:
 
 | Component | Estimate | Basis |
 |---|---|---|
-| Opus 5.5 optimizer (whole study) | ~$8–17 | ≤ 156 calls (39 loops × 4 rounds), ~3k input + 2–5k output tokens each, effort `low`–`medium` |
-| Mistral Large 3, Haiku 5.5 optimizers | a few dollars | same call count, much lower prices |
-| Target scoring | tens of dollars | dominant cost; volume of dev/test calls |
+| Opus 5.5 optimizer (whole study) | ~$3–6 | ≤ 108 calls (27 Opus loops × 4 rounds); pilot round 2 measured about $0.03 per call at effort `low` on AG News; SQuAD failure examples include passages, so assume up to ~$0.05 |
+| Mistral Large 3, Haiku 5.5 optimizers | under $1 | pilot: $0.006 (Mistral Large 3) and $0.003 (Haiku) per loop |
+| Target scoring | ~$5–15 | pilot: $0.01–0.05 per AG News loop on Gemma 12B; SQuAD prompts are longer and 27B costs more per token |
 
 Cost controls built into the harness (none of them change the design):
 
@@ -311,9 +329,8 @@ Every number in the eventual README must trace to one of these files.
 Resolved: Mistral-7B dropped (Ministral 8B instead); Ministral 3B/8B/14B added as replication family; Mistral Large 3
 added as open strong optimizer; Opus 5.5 at effort `low` as closed strong optimizer; Claude Sonnet 5.5 as intent judge.
 
-Still open:
-
-1. Confirm **SQuAD 2.0** over RACE, and retiring **SST-2** from the new study.
+Also resolved: SQuAD 2.0 (not RACE) as the second main task; SST-2 retired; no dedicated reasoning task (GSM8K and
+BIG-Bench Hard saturated, §3). Nothing is open.
 
 ## 13. Relation to the original brief
 

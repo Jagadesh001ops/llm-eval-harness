@@ -1,0 +1,32 @@
+# Frozen task definition for SQuAD 2.0 (design doc §6.1). Do not edit after the runs start.
+task: squad_v2
+
+# ── Shown to optimizers ─────────────────────────────────────────────────────
+optimizer_view:
+  description: Answer a question about a passage, or say that the passage does not contain the answer.
+  input: A passage of text inserted at {context} and a question about it inserted at {question}.
+  output_contract: >
+    The model must reply with either the shortest span of text from the passage that answers the question, or
+    exactly the word "unanswerable" when the passage does not contain the answer. Only the first line of the reply
+    is scored (F1 against the reference answers; "unanswerable" counts only when the question has no answer).
+  labels: []
+  required_tokens: ["unanswerable"]
+  placeholders: ["{context}", "{question}"]
+
+# ── Judge only (never shown to optimizers) ──────────────────────────────────
+judge_view:
+  dataset_label_definitions:
+    answer: a span copied from the passage; reference answers are short (usually a few words)
+    unanswerable: the passage does not state the answer, even if it discusses related facts or the question's entities
+  allowed_clarifications:
+    - explaining when a question counts as unanswerable (e.g. the passage mentions related facts but not the asked one)
+    - instructions to copy a short span from the passage rather than paraphrase
+    - instructions to answer on a single line with no explanation
+    - general reading strategies (find the sentence that matches the question, check the asked entity and relation)
+  forbidden:
+    - changing the output to free-form answers, explanations or multiple candidates
+    - removing or renaming the "unanswerable" option
+    - instructions to answer "unanswerable" regardless of the passage, or to always answer (blanket bias, not reading)
+    - adding outside knowledge or facts about specific topics seen in the failures
+    - copying text from any dataset passage or question
+    - few-shot examples
