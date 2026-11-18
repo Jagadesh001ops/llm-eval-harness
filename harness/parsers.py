@@ -1,7 +1,16 @@
 """Output parsers.
 
 The legacy_* functions are byte-for-byte the logic the stored results were scored with. They are kept
-so the original numbers stay reproducible; new scoring uses the strict parsers (added separately).
+so the original numbers stay reproducible; new scoring uses strict_sentiment_label / strict_ag_label.
+
+Strict parsing rules (documented in docs/statistics.md):
+  * zero_shot / few_shot ("answer" mode): the label is the first word of the output; if the first word
+    is not a label, the first line is accepted only if it names exactly one label. Text after the first
+    line (models often hallucinate extra few-shot examples there) is ignored.
+  * chain_of_thought ("cot" mode): the prompt asks the model to END with the label, so the last word
+    must be a label. Reasoning truncated before a final answer is "invalid", not guessed.
+  * Outcomes: a task label, "neutral" (a hedge; sentiment only - not a valid SST-2 class, so scored
+    wrong), or "invalid" (no parseable answer; scored wrong).
 """
 
 import re
@@ -65,3 +74,53 @@ def exact_match(prediction, aliases):
 def contains_answer(prediction, aliases):
     pred = normalize_answer(prediction)
     return any(normalize_answer(a) in pred for a in aliases)
+
+
+# ── Strict parsers ──────────────────────────────────────────────────────────
+
+NEUTRAL = "neutral"
+INVALID = "invalid"
+
+_SENTIMENT_MAP = {"positive": "positive", "negative": "negative", "neutral": NEUTRAL, "mixed": NEUTRAL}
+# AG News' official class name is "Sci/Tech", so technology words map to science. Nothing else is mapped:
+# e.g. "politics" or "entertainment" are not AG classes and count as invalid rather than being guessed.
+_AG_MAP = {"world": "world", "sports": "sports", "business": "business", "science": "science",
+           "sci/tech": "science", "sci-tech": "science", "technology": "science", "tech": "science"}
+
+_PREFIX = re.compile(r"^(sentiment|topic|answer|label|category|classification)\s*[:\-]\s*", re.I)
+_WORD = re.compile(r"[a-z]+(?:[/\-][a-z]+)?")
+
+
+def _words(text):
+    return _WORD.findall(text.lower())
+
+
+def _strict_label(raw_output, mapping, mode):
+    text = (raw_output or "").strip()
+    if not text:
+        return INVALID
+    if mode == "cot":
+        words = _words(text)
+        return mapping.get(words[-1], INVALID) if words else INVALID
+    first_line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    first_line = _PREFIX.sub("", first_line.strip().lstrip("*#>\"' "))
+    words = _words(first_line)
+    if not words:
+        return INVALID
+    found = {mapping[w] for w in words if w in mapping}
+    if words[0] in mapping:
+        first = mapping[words[0]]
+        # A leading hedge stays a hedge even if it leans ("neutral (or maybe slightly negative)").
+        # A leading class label is rejected if the line also names a different class ("positive or negative").
+        if first == NEUTRAL or not (found - {first, NEUTRAL}):
+            return first
+        return INVALID
+    return found.pop() if len(found) == 1 else INVALID
+
+
+def strict_sentiment_label(raw_output, prompt_variant):
+    return _strict_label(raw_output, _SENTIMENT_MAP, "cot" if prompt_variant == "chain_of_thought" else "answer")
+
+
+def strict_ag_label(raw_output, prompt_variant):
+    return _strict_label(raw_output, _AG_MAP, "cot" if prompt_variant == "chain_of_thought" else "answer")

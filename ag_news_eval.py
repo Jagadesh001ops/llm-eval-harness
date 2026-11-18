@@ -8,7 +8,7 @@ from datasets import load_dataset
 
 from config import AG_NEWS_PROMPT_TEMPLATES, MODELS
 from harness.bedrock import ModelUnavailable, compute_cost, invoke_model
-from harness.parsers import legacy_ag_label
+from harness.parsers import legacy_ag_label, strict_ag_label
 from harness.persist import Recorder, add_common_args
 
 AG_LABEL_MAP = {0: "world", 1: "sports", 2: "business", 3: "science"}
@@ -36,13 +36,16 @@ def main():
                 print(f"\nRunning {model_key} | {prompt_name}")
                 for i, ex in enumerate(examples):
                     result = invoke_model(model_key, template.format(text=ex["text"]))
-                    label = legacy_ag_label(result["output"])
+                    label = strict_ag_label(result["output"], prompt_name)
+                    legacy = legacy_ag_label(result["output"])
                     metrics = {
                         "text": ex["text"][:500],
                         "true_label": ex["true_label"],
                         "predicted_label": label,
                         "raw_output": result["output"],
                         "correct": int(label == ex["true_label"]),
+                        "legacy_label": legacy,
+                        "legacy_correct": int(legacy == ex["true_label"]),
                         "latency_ms": result["latency_ms"],
                         "cost_usd": compute_cost(result["input_tokens"], result["output_tokens"], model_key),
                     }
@@ -65,7 +68,8 @@ def main():
         accuracy=("correct", "mean"),
         avg_latency_ms=("latency_ms", "mean"),
         total_cost_usd=("cost_usd", "sum"),
-        unknown_rate=("predicted_label", lambda x: (x == "unknown").mean()),
+        invalid_rate=("predicted_label", lambda x: (x == "invalid").mean()),
+        legacy_accuracy=("legacy_correct", "mean"),
     )
     print(summary.round(4).to_string())
     print(f"\nCSV: {out}" + ("" if args.no_persist else f" | DynamoDB run_id: {run_id}"))
