@@ -21,7 +21,12 @@ def _get_client():
     global _client
     if _client is None:
         import boto3
-        _client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+        from botocore.config import Config
+        # Adaptive retries back off on throttling when many calls run in parallel; the pool size matches the
+        # scorer's thread count.
+        _client = boto3.client("bedrock-runtime", region_name=AWS_REGION,
+                               config=Config(retries={"mode": "adaptive", "max_attempts": 10},
+                                             max_pool_connections=32, read_timeout=120))
     return _client
 
 
@@ -33,10 +38,13 @@ def invoke_model(model_key, prompt, max_tokens=50, temperature=0, retries=3, bac
     for attempt in range(retries + 1):
         start = time.time()
         try:
+            cfg = {"maxTokens": max_tokens}
+            if temperature is not None:  # None = the model's default sampling (used for optimizer rewrites)
+                cfg["temperature"] = temperature
             response = _get_client().converse(
                 modelId=model_id,
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
+                inferenceConfig=cfg,
             )
             break
         except ClientError as e:

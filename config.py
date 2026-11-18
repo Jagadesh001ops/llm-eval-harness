@@ -27,6 +27,33 @@ MODELS = {
         "price_per_1k_input_tokens": 0.00265,
         "price_per_1k_output_tokens": 0.0035,
     },
+    # ── Prompt-optimization study (docs/design_prompt_optimization.md) ──
+    # Bedrock on-demand, us-east-1; prices are Bedrock list prices per 1k tokens as of 2026-11-18.
+    "gemma3-4b": {"model_id": "google.gemma-3-4b-it",
+                  "price_per_1k_input_tokens": 0.00004, "price_per_1k_output_tokens": 0.00008},
+    "gemma3-12b": {"model_id": "google.gemma-3-12b-it",
+                   "price_per_1k_input_tokens": 0.00009, "price_per_1k_output_tokens": 0.00029},
+    "gemma3-27b": {"model_id": "google.gemma-3-27b-it",
+                   "price_per_1k_input_tokens": 0.00023, "price_per_1k_output_tokens": 0.00038},
+    "ministral-3b": {"model_id": "mistral.ministral-3-3b-instruct",
+                     "price_per_1k_input_tokens": 0.0001, "price_per_1k_output_tokens": 0.0001},
+    "ministral-8b": {"model_id": "mistral.ministral-3-8b-instruct",
+                     "price_per_1k_input_tokens": 0.00015, "price_per_1k_output_tokens": 0.00015},
+    "ministral-14b": {"model_id": "mistral.ministral-3-14b-instruct",
+                      "price_per_1k_input_tokens": 0.0002, "price_per_1k_output_tokens": 0.0002},
+    "mistral-large-3": {"model_id": "mistral.mistral-large-3-675b-instruct",
+                        "price_per_1k_input_tokens": 0.0005, "price_per_1k_output_tokens": 0.0015},
+}
+
+# Claude models, called through the Anthropic API (not Bedrock). Prices per 1k tokens, list prices 2026-11-18.
+# Thinking tokens are billed as output.
+CLAUDE_MODELS = {
+    "claude-opus-5.5": {"model_id": "claude-opus-5-5",
+                        "price_per_1k_input_tokens": 0.004, "price_per_1k_output_tokens": 0.020},
+    "claude-haiku-5.5": {"model_id": "claude-haiku-5-5",
+                         "price_per_1k_input_tokens": 0.0001, "price_per_1k_output_tokens": 0.0005},
+    "claude-sonnet-5.5": {"model_id": "claude-sonnet-5-5",
+                          "price_per_1k_input_tokens": 0.002, "price_per_1k_output_tokens": 0.010},
 }
 # AWS settings
 AWS_REGION = "us-east-1"
