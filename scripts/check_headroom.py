@@ -30,11 +30,17 @@ def main():
         correct = [res["rows"][it["id"]]["correct"] for it in dev]
         trunc = sum(res["rows"][it["id"]]["stop_reason"] == "max_tokens" for it in dev)
         ci = bootstrap_mean_ci(correct)
-        rows.append({"task": task_name, "target": t, "seed_sha": prompt_sha(seed), "split": "dev", "n": ci["n"],
-                     "accuracy": ci["point"], "ci_lo": ci["lo"], "ci_hi": ci["hi"], "truncated": trunc,
-                     "new_cost_usd": res["cost_usd"]})
-        print(f"{t:<15} dev acc {ci['point']*100:5.1f} [{ci['lo']*100:.1f}, {ci['hi']*100:.1f}]  "
-              f"truncated {trunc}/{ci['n']}  cost ${res['cost_usd']:.4f}")
+        row = {"task": task_name, "target": t, "seed_sha": prompt_sha(seed), "split": "dev", "n": ci["n"],
+               "accuracy": ci["point"], "ci_lo": ci["lo"], "ci_hi": ci["hi"], "truncated": trunc,
+               "new_cost_usd": res["cost_usd"]}
+        groups = sorted({it["group"] for it in dev if "group" in it})
+        for g in groups:  # e.g. SQuAD 2.0 answerable vs unanswerable
+            row[f"score_{g}"] = sum(c for c, it in zip(correct, dev) if it.get("group") == g) / \
+                                sum(it.get("group") == g for it in dev)
+        rows.append(row)
+        extra = "  ".join(f"{g} {row[f'score_{g}']*100:.1f}" for g in groups)
+        print(f"{t:<15} dev score {ci['point']*100:5.1f} [{ci['lo']*100:.1f}, {ci['hi']*100:.1f}]  "
+              f"truncated {trunc}/{ci['n']}  {extra}  cost ${res['cost_usd']:.4f}")
     out = pathlib.Path(f"results/opt/headroom_{task_name}.csv")
     pd.DataFrame(rows).to_csv(out, index=False)
     print(f"-> {out}")

@@ -168,3 +168,74 @@ def extract_gsm8k_answer(raw_output):
 def gsm8k_correct(raw_output, gold):
     pred = extract_gsm8k_answer(raw_output)
     return int(pred is not None and gold is not None and abs(pred - gold) < 1e-6)
+
+
+# ── BIG-Bench Hard ──────────────────────────────────────────────────────────
+
+_MC = re.compile(r"^\(?([A-R])\)?(?:[\s.:,)]|$)")
+
+
+def normalize_bbh(ans):
+    """Canonical form of a BBH answer: '(B)' for options, lowercase words otherwise ('yes', 'valid', '12')."""
+    a = (ans or "").strip().strip("*`\"'").strip()
+    m = _MC.match(a)
+    if m:
+        return f"({m.group(1)})"
+    a = a.rstrip(".").strip().lower()
+    return re.sub(r"\s+", " ", a)
+
+
+def extract_bbh_answer(raw_output):
+    """Text after the LAST 'Answer:' up to the end of that line; None if there is no such line (scored wrong)."""
+    text = raw_output or ""
+    pos = text.lower().rfind("answer:")
+    if pos < 0:
+        return None
+    line = text[pos + len("answer:"):].strip().splitlines()
+    return line[0].strip() if line else None
+
+
+def bbh_correct(raw_output, target):
+    pred = extract_bbh_answer(raw_output)
+    return int(pred is not None and normalize_bbh(pred) == normalize_bbh(target))
+
+
+# ── SQuAD 2.0 ───────────────────────────────────────────────────────────────
+
+NO_ANSWER = "unanswerable"
+
+
+def squad_normalize(s):
+    """Official SQuAD normalisation: lowercase, drop punctuation and articles, collapse whitespace."""
+    import string
+    s = (s or "").lower()
+    s = "".join(ch for ch in s if ch not in set(string.punctuation))
+    s = re.sub(r"\b(a|an|the)\b", " ", s)
+    return " ".join(s.split())
+
+
+def _f1(pred, gold):
+    p, g = squad_normalize(pred).split(), squad_normalize(gold).split()
+    common = sum(min(p.count(w), g.count(w)) for w in set(p))
+    if common == 0:
+        return 0.0
+    prec, rec = common / len(p), common / len(g)
+    return 2 * prec * rec / (prec + rec)
+
+
+def squad_prediction(raw_output):
+    """First line of the reply, minus an 'Answer:' prefix. A reply that is just 'unanswerable' predicts no answer."""
+    line = next((ln for ln in (raw_output or "").strip().splitlines() if ln.strip()), "")
+    line = re.sub(r"^\s*answer\s*:\s*", "", line, flags=re.I).strip()
+    return NO_ANSWER if squad_normalize(line) == NO_ANSWER else line
+
+
+def squad_score(raw_output, gold_answers):
+    """Per-item F1 as in the official SQuAD 2.0 metric: unanswerable items score 1 only for a no-answer prediction;
+    answerable items score the max F1 over gold answers (0 for a no-answer prediction)."""
+    pred = squad_prediction(raw_output)
+    if not gold_answers:
+        return 1.0 if pred == NO_ANSWER else 0.0
+    if pred == NO_ANSWER:
+        return 0.0
+    return max(_f1(pred, g) for g in gold_answers)

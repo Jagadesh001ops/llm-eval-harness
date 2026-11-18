@@ -27,6 +27,10 @@ TASKS = {
 }
 N_POOL, N_DEV, N_TEST = 500, 200, 500
 
+BBH_SUBTASKS = ["date_understanding", "logical_deduction_five_objects", "tracking_shuffled_objects_five_objects",
+                "web_of_lies", "causal_judgement"]
+BBH_POOL, BBH_DEV = 50, 75  # BBH has one split of ~250 items: pool 50, dev 75, test = the rest
+
 
 def sha(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
@@ -62,7 +66,61 @@ def make(task):
     print(f"{task}: pool={len(pool)} dev={len(dev)} test={len(test_idx)} -> {out}")
 
 
+def _write(task, doc):
+    out = OUT / f"{task}.json"
+    if out.exists():
+        raise SystemExit(f"{out} exists; splits are frozen.")
+    OUT.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1), encoding="utf-8")
+    sizes = {k: len(doc[k]["indices"]) for k in ("pool", "dev", "test")}
+    print(f"{task}: {sizes} -> {out}")
+
+
+def make_bbh(sub):
+    from datasets import load_dataset
+    ds = load_dataset("lukaemon/bbh", sub, split="test")
+    order = np.random.default_rng([SEED, sum(map(ord, sub))]).permutation(len(ds)).tolist()
+    parts = {"pool": sorted(order[:BBH_POOL]), "dev": sorted(order[BBH_POOL:BBH_POOL + BBH_DEV]),
+             "test": sorted(order[BBH_POOL + BBH_DEV:])}
+    doc = {"task": f"bbh_{sub}", "hf_path": "lukaemon/bbh", "hf_config": sub, "seed": SEED}
+    for k, idx in parts.items():
+        doc[k] = {"split": "test", "indices": idx, "sha": [sha(ds[i]["input"]) for i in idx]}
+    _write(f"bbh_{sub}", doc)
+
+
+def make_squad():
+    """Pool and dev from train, test from validation (the official test set is hidden); dev and test are balanced
+    50/50 answerable/unanswerable so both behaviours are measured with equal precision."""
+    from datasets import load_dataset
+    rng = np.random.default_rng([SEED, 2])
+    train = load_dataset("rajpurkar/squad_v2", split="train")
+    val = load_dataset("rajpurkar/squad_v2", split="validation")
+
+    def balanced(ds, n, exclude=()):
+        has = np.array([len(a["text"]) > 0 for a in ds["answers"]])
+        ex = set(exclude)
+        ans = [i for i in rng.permutation(np.where(has)[0]).tolist() if i not in ex][: n // 2]
+        una = [i for i in rng.permutation(np.where(~has)[0]).tolist() if i not in ex][: n // 2]
+        return sorted(ans + una)
+
+    dev = balanced(train, N_DEV)
+    pool = balanced(train, N_POOL, exclude=dev)
+    test = balanced(val, N_TEST)
+    assert not set(pool) & set(dev)
+    doc = {"task": "squad_v2", "hf_path": "rajpurkar/squad_v2", "hf_config": None, "seed": SEED,
+           "pool": {"split": "train", "indices": pool, "sha": [sha(train[i]["question"]) for i in pool]},
+           "dev": {"split": "train", "indices": dev, "sha": [sha(train[i]["question"]) for i in dev]},
+           "test": {"split": "validation", "indices": test, "sha": [sha(val[i]["question"]) for i in test]}}
+    _write("squad_v2", doc)
+
+
 if __name__ == "__main__":
     configure_huggingface()
     for t in sys.argv[1:] or TASKS:
-        make(t)
+        if t == "bbh":
+            for sub in BBH_SUBTASKS:
+                make_bbh(sub)
+        elif t == "squad_v2":
+            make_squad()
+        else:
+            make(t)

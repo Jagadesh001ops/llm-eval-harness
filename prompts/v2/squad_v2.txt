@@ -1,0 +1,6 @@
+Answer the question using only the passage below. Reply with the shortest span from the passage that answers the question. If the passage does not contain the answer, reply with exactly: unanswerable
+
+Passage: {context}
+
+Question: {question}
+Answer:
