@@ -18,7 +18,7 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from harness.bedrock import ModelUnavailable  # noqa: E402
-from harness.intent import (LENGTH_CAP_RATIO, build_leak_index, check_candidate, lexical_novelty,  # noqa: E402
+from harness.intent import (build_leak_index, length_cap, check_candidate, lexical_novelty,  # noqa: E402
                             load_task_card)
 from harness.net import configure_huggingface  # noqa: E402
 from harness.optimizer import build_request, make_optimizer  # noqa: E402
@@ -30,7 +30,7 @@ LARGER = {"gemma3-4b": "gemma3-27b", "gemma3-12b": "gemma3-27b", "ministral-3b":
 SPLIT_SEED = 20261118
 N_FAILURES = 10
 HISTORY_KEEP = 8
-PROTOCOL = "v2"  # v2: min 2 rounds, patience 2, diagnosis step (pilot round 1 used v1)
+PROTOCOL = "v3"  # v3: length cap max(3x seed, 1000 chars), intent judge on; v2: min 2 rounds, patience 2, diagnosis
 MIN_ROUNDS = 2
 PATIENCE = 2
 
@@ -99,7 +99,7 @@ def main():
     if args.dev_n:
         dev = dev[: args.dev_n]
     leak_index = build_leak_index([task.show_input(it) for it in pool + dev + test])
-    max_chars = int(LENGTH_CAP_RATIO * len(seed))
+    max_chars = length_cap(seed)
     optimizer = make_optimizer(opt_name, effort=effort)
     judge = None
     if args.intent_judge:

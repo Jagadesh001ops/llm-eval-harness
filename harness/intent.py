@@ -11,6 +11,12 @@ import re
 import yaml
 
 LENGTH_CAP_RATIO = 3.0
+LENGTH_CAP_MIN = 1000  # protocol v3: 3x a very short seed (AG News: 444 chars) blocked every Haiku rewrite
+
+
+def length_cap(seed_prompt):
+    """Maximum rewrite length in characters: the larger of 3x the seed prompt and 1,000 characters."""
+    return max(int(LENGTH_CAP_RATIO * len(seed_prompt)), LENGTH_CAP_MIN)
 LEAK_NGRAM = 8
 
 _PLACEHOLDER = re.compile(r"\{[^{}\s]*\}")
@@ -73,8 +79,9 @@ def check_candidate(candidate, card, seed_prompt, leak_index):
     if missing_tokens:
         v.append(("labels", f"required output tokens missing: {missing_tokens}"))
 
-    if len(candidate) > LENGTH_CAP_RATIO * len(seed_prompt):
-        v.append(("length", f"{len(candidate)} chars > {LENGTH_CAP_RATIO}x seed ({len(seed_prompt)})"))
+    cap = length_cap(seed_prompt)
+    if len(candidate) > cap:
+        v.append(("length", f"{len(candidate)} chars > cap {cap}"))
 
     if _EXAMPLE_INPUT.search(candidate):
         v.append(("few_shot", "contains a filled-in example input line"))

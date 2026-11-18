@@ -59,3 +59,11 @@ def test_lexical_novelty():
     assert lexical_novelty(SEED, CARD, SEED) == 0.0
     nov = lexical_novelty(ORACLE, CARD, SEED)
     assert 0.0 < nov < 1.0  # oracle adds words such as 'technology', 'computing'
+
+
+def test_length_cap_floor_v3():
+    from harness.intent import length_cap
+    assert length_cap(SEED) == 1000                 # 3 x 148 = 444 < 1,000 floor
+    assert length_cap("x" * 400) == 1200            # 3x applies when larger
+    long_ok = SEED.replace("Reply with one word only.", "Reply with one word only. " + "Consider the main subject. " * 14)
+    assert 444 < len(long_ok) <= 1000 and "length" not in rules(long_ok)
