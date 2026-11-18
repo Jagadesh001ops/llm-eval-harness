@@ -38,8 +38,16 @@ Prompts tried so far and their accuracy on a development set (higher is better):
 Examples the target model currently gets wrong with the current prompt:
 {failures}
 
-Write {n} different improved prompts that would help the target model get more of these cases right without breaking the rules.
-Return each prompt inside its own <prompt></prompt> tags and nothing else."""
+First, inside <analysis></analysis> tags, briefly diagnose what these failures have in common and why the current prompt leads the target model to make them. Generalise: describe patterns, not individual examples.
+Then write {n} different improved prompts that address your diagnosis and would help the target model get more of these cases right without breaking the rules.
+Return each prompt inside its own <prompt></prompt> tags after the analysis, and nothing else."""
+
+_ANALYSIS = re.compile(r"<analysis>\s*(.*?)\s*</analysis>", re.S | re.I)
+
+
+def parse_analysis(text):
+    m = _ANALYSIS.search(text or "")
+    return m.group(1).strip() if m else None
 
 CONTROL_TEMPLATE = """You are improving an instruction prompt for a small language model (the "target model").
 
@@ -63,7 +71,8 @@ _TAG = re.compile(r"<prompt>\s*(.*?)\s*(?:</prompt>|$)", re.S | re.I)
 def parse_candidates(text, n=N_CANDIDATES):
     """Extract up to n prompts from <prompt> tags (a final unclosed tag is accepted). No tags -> no candidates:
     an optimizer that cannot follow the output format gets no free pass (counted as unparseable)."""
-    found = [c.strip() for c in _TAG.findall(text or "") if c.strip()]
+    text = _ANALYSIS.sub("", text or "")  # never parse prompts out of the diagnosis
+    found = [c.strip() for c in _TAG.findall(text) if c.strip()]
     return found[:n]
 
 
@@ -90,7 +99,8 @@ class BedrockOptimizer:
 
     def propose(self, request):
         r = invoke_model(self.model_key, request, max_tokens=self.max_tokens, temperature=None)
-        return {"raw": r["output"], "candidates": parse_candidates(r["output"]), "stop_reason": r["stop_reason"],
+        return {"raw": r["output"], "candidates": parse_candidates(r["output"]), "analysis": parse_analysis(r["output"]),
+                "stop_reason": r["stop_reason"],
                 "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"],
                 "cost_usd": compute_cost(r["input_tokens"], r["output_tokens"], self.model_key)}
 
@@ -115,7 +125,8 @@ class ClaudeOptimizer:
         u = r.usage
         cost = (u.input_tokens / 1000) * self.spec["price_per_1k_input_tokens"] + \
                (u.output_tokens / 1000) * self.spec["price_per_1k_output_tokens"]
-        return {"raw": text, "candidates": parse_candidates(text), "stop_reason": r.stop_reason,
+        return {"raw": text, "candidates": parse_candidates(text), "analysis": parse_analysis(text),
+                "stop_reason": r.stop_reason,
                 "input_tokens": u.input_tokens, "output_tokens": u.output_tokens, "cost_usd": cost,
                 "request_id": getattr(r, "_request_id", None)}
 

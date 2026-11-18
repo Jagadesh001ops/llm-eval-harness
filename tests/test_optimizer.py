@@ -33,3 +33,17 @@ def test_control_request_has_no_failures_or_scores():
 def test_judge_view_never_reaches_optimizer():
     req = build_request(CARD, "P {text}", [], [], 500)
     assert "Sci/Tech" not in req and "technology" not in req.lower()
+
+
+def test_analysis_parsed_and_excluded_from_candidates():
+    from harness.optimizer import parse_analysis
+    text = ("<analysis>Tech stories get labelled business; a <prompt> tag mentioned here must not count.</analysis>\n"
+            "<prompt>A {text}</prompt><prompt>B {text}</prompt>")
+    assert parse_analysis(text).startswith("Tech stories")
+    assert parse_candidates(text) == ["A {text}", "B {text}"]
+
+
+def test_diagnosis_step_only_with_feedback():
+    fb = build_request(CARD, "P {text}", [], [{"input": "x", "output": "y", "gold": "z"}], 500)
+    ctl = build_request(CARD, "P {text}", [], [], 500, feedback=False)
+    assert "<analysis>" in fb and "<analysis>" not in ctl

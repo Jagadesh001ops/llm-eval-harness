@@ -133,12 +133,21 @@ for accuracy is about ±4 points; paired differences are tighter.
    optimizers.
 2. **Score** the current prompt on dev with the target. Sample 10 failures from the failure pool (raw output + gold).
 3. **Propose.** The optimizer receives the task card (§6.1), current prompt, history of previous prompts with dev
-   scores, the 10 failures, and the rules. It returns 4 candidate prompts. The control condition receives the task card,
-   current prompt and rules only.
+   scores, the 10 failures, and the rules. It first writes a short **diagnosis** of what the failures have in common
+   and why the current prompt causes them (in `<analysis>` tags, logged), then returns 4 candidate prompts that
+   address it. The control condition receives the task card, current prompt and rules only (no failures, scores or
+   diagnosis step).
 4. **Check** every candidate against §6. Rejected candidates are logged with the reason and count toward that
    optimizer's violation rate; they are not replaced (equal budget across optimizers).
 5. **Score** valid candidates on dev; the best replaces the current prompt only if strictly better.
-6. Repeat up to **4 rounds**; stop early if a round produces no improvement.
+6. Repeat up to **4 rounds**. Always run at least 2 rounds; stop early only after **2 consecutive rounds** without
+   improvement (patience 2).
+
+**Protocol versions.** Protocol **v2** (above) is frozen as of 2026-11-18 and used for every reported run. Pilot round
+1 used v1 (stop after the first non-improving round; no diagnosis step). It is kept in `results/opt_pilot/` as
+exploratory and is excluded from all reported results. The v1 → v2 changes were motivated by optimizer behaviour in
+that pilot (two of four loops stopped after one round on 0.5-point dev differences; no optimizer acted on the failures
+it was shown), not by test scores. Every log records its protocol version.
 7. **Final:** score the chosen prompt once on test. **Transfer:** score it on every other target's test run too.
 8. **Seeds:** repeat each loop 3 times (independent runs; Claude models cannot be seeded, so "seed" = run index).
 

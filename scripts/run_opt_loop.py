@@ -30,6 +30,9 @@ LARGER = {"gemma3-4b": "gemma3-27b", "gemma3-12b": "gemma3-27b", "ministral-3b":
 SPLIT_SEED = 20261118
 N_FAILURES = 10
 HISTORY_KEEP = 8
+PROTOCOL = "v2"  # v2: min 2 rounds, patience 2, diagnosis step (pilot round 1 used v1)
+MIN_ROUNDS = 2
+PATIENCE = 2
 
 
 def optimizer_for(condition, target):
@@ -97,7 +100,7 @@ def main():
     max_chars = int(LENGTH_CAP_RATIO * len(seed))
     optimizer = make_optimizer(opt_name, effort=effort)
 
-    log = {"task": args.task, "target": args.target, "condition": args.condition, "run": args.run,
+    log = {"protocol": PROTOCOL, "min_rounds": MIN_ROUNDS, "patience": PATIENCE, "task": args.task, "target": args.target, "condition": args.condition, "run": args.run,
            "optimizer": opt_name, "effort": effort, "feedback": feedback, "rounds_max": args.rounds,
            "dev_n": len(dev), "seed_prompt": seed, "seed_sha": prompt_sha(seed), "rounds": [],
            "cost_usd": {"target_scoring": 0.0, "optimizer": 0.0}, "status": "running",
@@ -112,6 +115,7 @@ def main():
         current, current_dev = seed, s["accuracy"]
         log["seed_dev_accuracy"] = current_dev
         history = [(seed, current_dev)]
+        streak = 0
         print(f"seed dev acc {current_dev:.3f} (n={len(dev)})")
 
         for rnd in range(1, args.rounds + 1):
@@ -145,12 +149,15 @@ def main():
                 "round": rnd, "failures_shown": [f["id"] for f in fails], "optimizer_stop_reason": resp["stop_reason"],
                 "optimizer_tokens": [resp["input_tokens"], resp["output_tokens"]],
                 "n_parsed": len(resp["candidates"]), "n_valid": len(valid), "candidates": cands,
-                "improved": improved, "current_dev_accuracy": current_dev, "optimizer_raw": resp["raw"]})
+                "improved": improved, "current_dev_accuracy": current_dev, "optimizer_analysis": resp.get("analysis"),
+                "optimizer_raw": resp["raw"]})
             save()
+            streak = 0 if improved else streak + 1
+            stop = rnd >= MIN_ROUNDS and streak >= PATIENCE
             print(f"round {rnd}: parsed {len(resp['candidates'])}, valid {len(valid)}, "
                   f"best {best['dev_accuracy'] if best else float('nan'):.3f}, current {current_dev:.3f}"
-                  f"{' (improved)' if improved else ' (no improvement -> stop)'}")
-            if not improved:
+                  f"{' (improved)' if improved else ' (no improvement)'}{' -> stop' if stop else ''}")
+            if stop:
                 break
 
         log["final_prompt"], log["final_sha"], log["final_dev_accuracy"] = current, prompt_sha(current), current_dev
