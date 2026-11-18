@@ -1,0 +1,4 @@
+Classify the topic of the following news headline as one of: world, sports, business, or science. Reply with one word only.
+
+Headline: {text}
+Topic:

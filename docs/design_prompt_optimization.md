@@ -122,10 +122,15 @@ for accuracy is about ±4 points; paired differences are tighter.
                        └► prompt transfer: scored on every other target's test run
 ```
 
-1. **Seed prompt (v2)** per task: the v1 prompt with known harness defects fixed (AG News label named Sci/Tech;
-   reasoning budget large enough to finish; explicit final-answer line). The v1 prompts are kept unchanged so v1 results
-   stay reproducible. Optimization uses **instruction-only** prompts: no few-shot examples, so a rewrite cannot smuggle
-   in content through examples.
+1. **Seed prompt (v2)** per task: the v1 prompt with **harness** defects fixed only (reasoning budget large enough to
+   finish; explicit final-answer line). **Prompt-quality** flaws are deliberately kept: e.g. AG News still names the
+   Sci/Tech class "science", because whether an optimizer discovers that from failures is a measured outcome
+   ("Diagnosis", §7). For AG News, v2 is therefore identical to the v1 zero-shot prompt. The v1 prompts are kept
+   unchanged so v1 results stay reproducible. Optimization uses **instruction-only** prompts: no few-shot examples, so
+   a rewrite cannot smuggle in content through examples.
+   A hand-written **oracle** prompt per task (`prompts/reference/`), which fixes the known flaws using the dataset's
+   own label definitions, is scored on the same test items as a human-expert reference. It is never shown to
+   optimizers.
 2. **Score** the current prompt on dev with the target. Sample 10 failures from the failure pool (raw output + gold).
 3. **Propose.** The optimizer receives the task card (§6.1), current prompt, history of previous prompts with dev
    scores, the 10 failures, and the rules. It returns 4 candidate prompts. The control condition receives the task card,
@@ -146,7 +151,10 @@ labels, facts or goals that change the meaning of the prompt.
 
 ### 6.1 Task card (the fixed definition every rewrite must stay within)
 
-One file per task, `prompts/task_cards/<task>.yaml`, written by hand before any run and frozen:
+One file per task, `prompts/task_cards/<task>.yaml`, written by hand before any run and frozen. It has two parts:
+an **optimizer view** (task, input, output contract, labels, placeholders), which optimizers receive, and a **judge
+view** (the dataset's own label definitions, allowed and forbidden edits), which only the intent judge sees, so that
+the card never hands optimizers the answer to a flaw they are supposed to discover. Together they specify:
 
 * what the input is and what is being asked;
 * the exact output contract (label set / answer format / the literal token `unanswerable` for SQuAD 2.0);
