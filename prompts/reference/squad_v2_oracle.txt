@@ -1,0 +1,9 @@
+Answer the question using only the passage below.
+- If a short span of the passage answers the question, reply with that span copied exactly, and nothing else.
+- If the passage does not state the answer, reply with exactly: unanswerable
+A passage can mention the people, places or topics in the question without answering it. Answer only if the passage states the specific fact that is asked; otherwise reply unanswerable.
+
+Passage: {context}
+
+Question: {question}
+Answer:

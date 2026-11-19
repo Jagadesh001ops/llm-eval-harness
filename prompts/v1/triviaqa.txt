@@ -1,0 +1,4 @@
+Answer the following question with a short, direct answer. Give only the answer, nothing else.
+
+Question: {question}
+Answer:

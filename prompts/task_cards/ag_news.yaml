@@ -1,0 +1,32 @@
+# Frozen task definition for AG News (design doc §6.1). Do not edit after the pilot starts.
+task: ag_news
+
+# ── Shown to optimizers ─────────────────────────────────────────────────────
+optimizer_view:
+  description: Classify a news article into one of four topic categories.
+  input: A news article snippet (headline followed by a short description), inserted at {text}.
+  output_contract: >
+    The model must answer with exactly one of the four label words: world, sports, business, science.
+    The answer is scored by reading the first word of the model's reply.
+  labels: [world, sports, business, science]
+  placeholders: ["{text}"]
+
+# ── Judge only (never shown to optimizers) ──────────────────────────────────
+judge_view:
+  dataset_label_definitions:
+    # From the AG News dataset card; the dataset's own class names are World, Sports, Business, Sci/Tech.
+    world: international news, politics, conflicts, governments
+    sports: sports events, teams, athletes
+    business: companies, markets, finance, the economy
+    science: the dataset class "Sci/Tech" - science AND technology (computing, internet, tech products, space, health research)
+  allowed_clarifications:
+    - defining any of the four labels in line with dataset_label_definitions (e.g. stating that science includes technology)
+    - describing the input as a headline plus description
+    - instructions about answering with a single label word
+    - general strategies (e.g. decide by the main subject of the article)
+  forbidden:
+    - any label or answer option other than world, sports, business, science (e.g. politics, technology, entertainment, health as separate answers)
+    - definitions that contradict dataset_label_definitions (e.g. technology companies' products count as business)
+    - instructions keyed to specific companies, people or events seen in the failures
+    - copying text from any dataset item
+    - few-shot examples

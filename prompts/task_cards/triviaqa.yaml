@@ -1,0 +1,27 @@
+# Frozen task definition for TriviaQA closed-book (design doc §6.1). The control task: prompts cannot add facts,
+# so gains here are expected to come from answer format. Do not edit after the runs start.
+task: triviaqa
+
+# ── Shown to optimizers ─────────────────────────────────────────────────────
+optimizer_view:
+  description: Answer a trivia question from memory, without any reference text.
+  input: A trivia question inserted at {question}.
+  output_contract: >
+    The model must reply with a short, direct answer (a name, place, date or term). The answer on the first line (or
+    after "Answer:") is compared with the accepted answers by exact match after normalisation.
+  labels: []
+  placeholders: ["{question}"]
+
+# ── Judge only (never shown to optimizers) ──────────────────────────────────
+judge_view:
+  dataset_label_definitions:
+    answer: a short entity or term; several aliases are accepted (e.g. "JFK", "John F. Kennedy")
+  allowed_clarifications:
+    - instructions about answer form (just the name or term, no sentence, no explanation, no hedging)
+    - general strategies (recall carefully, give the most commonly used name)
+  forbidden:
+    - any facts, hints or answers about specific questions, people, places or events
+    - changing the task (e.g. asking for explanations, multiple guesses or a confidence score)
+    - instructions to abstain or refuse instead of answering
+    - copying text from any dataset question
+    - few-shot examples

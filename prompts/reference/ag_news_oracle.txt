@@ -1,0 +1,9 @@
+Classify the topic of the following news article as one of: world, sports, business, or science.
+- world: international news, politics, conflicts and governments
+- sports: sports events, teams and athletes
+- business: companies, markets, finance and the economy
+- science: science and technology, including computing, the internet, technology products, space and health research
+Reply with one word only.
+
+Article: {text}
+Topic:

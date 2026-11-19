@@ -18,7 +18,6 @@ The logic here works identically with a SageMaker endpoint — swap the bedrock
 client for a sagemaker-runtime client when dedicated throughput is needed.
 """
 
-import boto3
 import json
 import pathlib
 import pandas as pd
@@ -26,46 +25,17 @@ import sys
 import time
 import re
 from datetime import datetime, timezone
-from config import MODELS, AWS_REGION, PROMPT_TEMPLATES
+from config import MODELS, PROMPT_TEMPLATES
 from db import write_result
+from harness.bedrock import compute_cost, invoke_model
+from harness.parsers import legacy_sentiment_label as extract_label
 from metrics import put_invocation_metrics
 
 ACCURACY_THRESHOLD = 0.90  # skip optimisation if val accuracy is at or above this
 
-client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 BOSS_MODEL_KEY = "llama3-70b"
 
-# ── Helpers (same as eval.py) ─────────────────────────────────────────────
-
-def invoke_model(model_key, prompt, max_tokens=50):
-    model_id = MODELS[model_key]["model_id"]
-    start = time.time()
-    response = client.converse(
-        modelId=model_id,
-        messages=[{"role": "user", "content": [{"text": prompt}]}],
-        inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
-    )
-    latency = time.time() - start
-    output = response["output"]["message"]["content"][0]["text"].strip()
-    return {
-        "output": output,
-        "input_tokens": response["usage"]["inputTokens"],
-        "output_tokens": response["usage"]["outputTokens"],
-        "latency_ms": round(latency * 1000),
-    }
-
-def compute_cost(input_tokens, output_tokens, model_key):
-    m = MODELS[model_key]
-    return (input_tokens / 1000) * m["price_per_1k_input_tokens"] + \
-           (output_tokens / 1000) * m["price_per_1k_output_tokens"]
-
-def extract_label(raw_output):
-    text = raw_output.lower().strip()
-    first_word = text.split()[0].strip(".,!?") if text else ""
-    for label in ["positive", "negative"]:
-        if label in text or first_word == label:
-            return label
-    return "unknown"
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 def eval_prompt(prompt_template, examples, model_key):
     results = []
