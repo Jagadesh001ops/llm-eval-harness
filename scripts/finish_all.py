@@ -16,6 +16,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 STEPS = [
     ["scripts/run_grid.py", "--intent-judge", "--workers", "4"],
     ["scripts/run_transfer.py", "--workers", "4"],
+    ["scripts/run_sensitivity.py", "--workers", "3"],  # test-scores the no-judge picks the analysis needs
     ["analysis/analyze_grid.py"],
 ]
 

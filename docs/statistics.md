@@ -106,3 +106,19 @@ than mapped to world/science. Both rules are deliberately conservative.
 | `results/rescored/{sst2,ag_news}_items.csv` | per-item rows with legacy and strict labels |
 | `results/run_determinism.csv` | run-to-run variation from DynamoDB |
 | `results/summarization_eval.csv` | **orphan**: no script in the repo produces it and its faithfulness column is all 0; not used |
+
+## 7. Prompt-optimization grid (`analysis/analyze_grid.py`)
+
+* **Unit and gain.** A loop's gain is its final prompt's test score minus the starting prompt's, on the same 500 items.
+  A cell (task, target, optimizer) has 1-3 runs.
+* **Interval.** Two-level bootstrap, B = 10,000, seed 20261118: resample the runs of a cell, then resample items, using
+  the same item indices for every prompt compared. Between two conditions the runs are resampled independently and
+  the items jointly. Intervals are 95% percentile intervals.
+* **Hypotheses.** H1 (Opus minus self): Holm-adjusted across the 9 target-task cells. H3 (self minus control), H5 (larger
+  minus Opus, non-inferiority: lower bound above -1 point) and H8 (equivalence: the whole interval of Mistral Large 3
+  minus Opus inside +/-2 points) are per cell and uncorrected. H2, H4, H6 and H7 are descriptive.
+* **Without-judge sensitivity.** The judge ran in every loop, so loops cannot be replayed without it. The approximation in
+  `harness/sensitivity.py` takes the best-dev rule-valid candidate, judge-rejected ones included, if it beats the loop's
+  final dev score, and scores it on test.
+* **Length.** Spearman correlation between final prompt length and gain across runs; descriptive, confounded by
+  optimizer type.
