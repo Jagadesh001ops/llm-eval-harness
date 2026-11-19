@@ -1,5 +1,7 @@
 """Parser tests. Most inputs are real raw outputs (or trimmed prefixes of them) from results/*.csv."""
 
+import os
+
 import pytest
 
 from harness.parsers import (AMBIGUOUS, INVALID, NEUTRAL, legacy_ag_label, legacy_sentiment_label, strict_ag_label,
@@ -89,10 +91,14 @@ class TestLegacyReproducesStoredResults:
 
     def test_sst2(self):
         import pandas as pd
+        if not os.path.exists("results/all_models_all_prompts.csv"):
+            pytest.skip("raw results are not committed; this check needs the local results/ files")
         d = pd.read_csv("results/all_models_all_prompts.csv")
         assert (d.raw_output.fillna("").map(legacy_sentiment_label) == d.predicted_label).all()
 
     def test_ag_news(self):
         import pandas as pd
+        if not os.path.exists("results/ag_news_results.csv"):
+            pytest.skip("raw results are not committed; this check needs the local results/ files")
         d = pd.read_csv("results/ag_news_results.csv")
         assert (d.raw_output.fillna("").map(legacy_ag_label) == d.predicted_label).all()

@@ -6,8 +6,8 @@ whether the optimizer needs to be a frontier model, merely a larger model of the
 model can do it itself.
 
 > **Status (2026-11-19): main grid complete** (153 loops, protocol v3, 6 optimizers x 6 targets x 3 tasks). Every
-> number below is produced by a script from files under `results/`. Runs per cell are few (1-3) and the intent judge
-> was not validated; see Limitations.
+> number below is produced by a script from local result files (not committed; see Reproducing). Runs per cell are
+> few (1-3) and the intent judge was not validated; see Limitations.
 
 ## Results at a glance
 
@@ -267,6 +267,12 @@ python scripts/finish_all.py                          # grid, transfer, sensitiv
 python analysis/make_readme_tables.py                 # regenerate the results block above
 python -m pytest
 ```
+
+**Raw results are not committed.** Per-item outputs, loop logs, caches and CSVs live under `results/`, which is
+git-ignored; the tables in this README are the published record, and the file names in the "Source" columns refer to
+local outputs of the scripts above. Re-running the pipeline regenerates all of them for roughly $30 in model calls.
+The frozen data splits (`data/splits/`), prompts and task cards are committed, so a re-run uses the same items. Two
+parser tests that compare against the original CSVs skip themselves when those files are absent.
 
 Behind a TLS-intercepting proxy or antivirus, set `EVAL_CA_BUNDLE` to a PEM bundle that includes its root CA. If NumPy
 fails with an out-of-memory error on a loaded machine, set `OPENBLAS_NUM_THREADS=1`.

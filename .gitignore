@@ -3,6 +3,8 @@ package/
 __pycache__/
 *.pyc
 lambda_package.zip
-results/plots/
+# Raw results (per-item outputs, loop logs, caches, CSVs) are not committed. The README carries the results;
+# regenerate everything locally with the scripts (see README "Reproducing").
+results/
 .env
 .pytest_cache/
